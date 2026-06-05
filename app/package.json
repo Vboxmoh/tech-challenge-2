@@ -1,0 +1,9 @@
+{
+  "name": "tc2-app",
+  "version": "1.0.0",
+  "description": "Tech Challenge 2 - Hello World Node.js app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js" 
+  }
+}
