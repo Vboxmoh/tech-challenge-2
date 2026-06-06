@@ -28,7 +28,7 @@ User → ALB → EKS Cluster → Pod
 
 ## Infrastructure Notes
 
-> ⚠️ The TC2 specification requires t3.small nodes. This project uses t3.micro due to AWS account free-tier restrictions. As a result, 3 nodes are required instead of 1 to accommodate the system pods and application pods (t3.micro supports a maximum of 4 pods per node). All other requirements are fully met.
+> ⚠️ The TC2 specification requires t3.small nodes. This project uses t3.micro due to AWS account free-tier restrictions. The cluster was scaled progressively: 3 nodes initially for core infrastructure, then up to 7 nodes to accommodate Argo CD (which requires 7 additional pods). All functional requirements are fully met.
 
 ## Repository Structure
 tech-challenge-2/
@@ -146,7 +146,7 @@ terraform apply
 | Parameter | Value |
 |---|---|
 | Instance type | t3.micro (free-tier) |
-| Nodes | 3 (min: 1, max: 4) |
+| Nodes |	3 initially → scaled to 7 for Argo CD (min: 1, max: 7) |
 | HPA min pods | 1 |
 | HPA max pods | 3 |
 | HPA CPU trigger | 50% |
