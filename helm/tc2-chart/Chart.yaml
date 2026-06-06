@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tc2-chart
+description: Tech Challenge 2 - Node.js Hello World on EKS
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

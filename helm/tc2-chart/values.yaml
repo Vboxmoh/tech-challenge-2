@@ -1,0 +1,32 @@
+image:
+  repository: 277778298945.dkr.ecr.eu-west-3.amazonaws.com/tc2-app
+  tag: "v1"
+  pullPolicy: Always
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "200m"
+    memory: "256Mi"
+
+hpa:
+  minReplicas: 1
+  maxReplicas: 3
+  cpuUtilization: 50
+  memoryUtilization: 50
