@@ -177,3 +177,83 @@ terraform destroy
 cd jenkins/terraform
 terraform destroy
 ```
+## Bonus — GitOps with GitHub Actions & Argo CD
+
+The `gitops` branch implements a GitOps-style CI/CD workflow as an alternative to Jenkins.
+
+### Architecture
+Push code to gitops branch
+↓
+GitHub Actions — Build Docker image + Push to ECR + Update values.yaml
+↓
+Argo CD detects change in values.yaml
+↓
+Argo CD automatically redeploys to EKS
+### GitHub Actions (CI)
+
+The workflow `.github/workflows/ci.yml` is triggered on every push to the `gitops` branch:
+1. Builds the Docker image
+2. Pushes it to Amazon ECR with the commit SHA as tag
+3. Updates `helm/tc2-chart/values.yaml` with the new image tag
+
+### Argo CD (CD)
+
+Argo CD is installed in the EKS cluster and watches the `gitops` branch. It automatically syncs the cluster state with the Helm chart whenever `values.yaml` changes.
+
+### Infrastructure Notes for GitOps
+
+> ⚠️ Due to t3.micro pod limits (4 pods per node), 7 nodes were required to run all system pods + Argo CD (7 pods) + the application. The CRD `applicationsets.argoproj.io` required server-side apply due to annotation size limits (`--server-side` flag).
+
+### Argo CD Access
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+# Visit https://localhost:8080
+# Username: admin
+# Password: kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
+```
+
+### GitOps Demo
+
+The application serves `Hello from GitOps!` when deployed from the `gitops` branch, demonstrating end-to-end GitOps reconciliation.
+## Troubleshooting & Technical Challenges
+
+### 1. ECR login failing in PowerShell
+**Problem:** `aws ecr get-login-password | docker login` returned error 400 in PowerShell.  
+**Cause:** PowerShell pipe does not handle binary output correctly on Windows.  
+**Solution:** Use Git Bash for all commands involving pipes (`|`).
+
+### 2. t3.micro pod limit (4 pods per node)
+**Problem:** AWS Load Balancer Controller pods were stuck in `Pending` state.  
+**Cause:** t3.micro instances support a maximum of 4 pods per node due to ENI limitations. All 4 slots were already occupied by system pods (aws-node, coredns x2, kube-proxy).  
+**Solution:** Added additional nodes to the cluster. Prefix delegation (`ENABLE_PREFIX_DELEGATION=true`) was attempted but is not supported on t3.micro due to single ENI limitations.
+
+### 3. Jenkins Docker socket permission denied
+**Problem:** Jenkins pipeline failed with `permission denied while trying to connect to the Docker daemon socket`.  
+**Cause:** The `jenkins` user inside the container did not have access to `/var/run/docker.sock`.  
+**Solution:** `chmod 666 /var/run/docker.sock` inside the Jenkins container.
+
+### 4. Jenkins EC2 IP changes on reboot
+**Problem:** Jenkins URL changed after every EC2 stop/start cycle.  
+**Cause:** Public IP is dynamically assigned by AWS on each start.  
+**Solution:** Updated the GitHub webhook URL after each restart. An Elastic IP could be attached to avoid this permanently.
+
+### 5. jenkins-ci-user not authorized on EKS
+**Problem:** `kubectl get nodes` inside Jenkins returned `Unauthorized` error.  
+**Cause:** `jenkins-ci-user` was not listed in the EKS `aws-auth` ConfigMap.  
+**Solution:** Added `jenkins-ci-user` to `aws-auth` ConfigMap with `system:masters` group.
+
+### 6. Argo CD CRD too large
+**Problem:** `kubectl apply` failed with `metadata.annotations: Too long: may not be more than 262144 bytes` when installing Argo CD.  
+**Cause:** The `ApplicationSet` CRD annotations exceed the kubectl client-side apply limit.  
+**Solution:** Used server-side apply: `kubectl apply --server-side -f ...`
+
+### 7. Argo CD pods Pending due to t3.micro pod limits
+**Problem:** Argo CD requires 7 pods minimum — combined with system pods and the application, the cluster ran out of pod slots.  
+**Cause:** t3.micro supports only 4 pods per node.  
+**Solution:** Scaled the node group progressively from 3 to 7 nodes to accommodate all pods.
+
+### 8. GitHub Actions permission denied when pushing to repo
+**Problem:** GitHub Actions failed with `remote: Permission to Vboxmoh/tech-challenge-2.git denied to github-actions[bot]`.  
+**Cause:** Default workflow permissions are read-only.  
+**Solution:** Enabled **Read and write permissions** under Settings → Actions → General → Workflow permissions.
